@@ -1,4 +1,5 @@
 from flask import Flask, request, jsonify, render_template
+from flask_cors import CORS
 from pathlib import Path
 import joblib
 import re
@@ -335,15 +336,15 @@ def predict():
 
     except Exception as e:
 
-     import traceback
+        import traceback
 
-    print("\n===== ERROR =====")
-    traceback.print_exc()
-    print("=================\n")
+        print("\n===== ERROR =====")
+        traceback.print_exc()
+        print("=================\n")
 
-    return jsonify({
-        "error": str(e)
-    }), 500
+        return jsonify({
+            "error": str(e)
+        }), 500
 # ========================================
 # Dashboard Stats API
 # ========================================
