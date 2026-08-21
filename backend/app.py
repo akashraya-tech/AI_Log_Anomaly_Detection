@@ -48,15 +48,16 @@ print("AI model loaded successfully!")
 # Database Connection
 # ========================================
 
+import os
+
 def get_db_connection():
 
     return mysql.connector.connect(
-        host="localhost",
-        user="root",
-        password="AkashMySQL@2026!",
-        database="ai_log_anomaly"
+        host=os.environ.get("DB_HOST", "localhost"),
+        user=os.environ.get("DB_USER", "root"),
+        password=os.environ.get("DB_PASSWORD", "AkashMySQL@2026!"),
+        database=os.environ.get("DB_NAME", "ai_log_anomaly")
     )
-
 print("MySQL database connection ready!")
 
 # ========================================
@@ -340,7 +341,8 @@ def predict():
         })
 
     except Exception as e:
-      import traceback
+
+     import traceback
 
     print("\n===== ERROR =====")
     traceback.print_exc()
@@ -349,7 +351,6 @@ def predict():
     return jsonify({
         "error": str(e)
     }), 500
-
 # ========================================
 # Dashboard Stats API
 # ========================================
@@ -429,14 +430,8 @@ if __name__ == "__main__":
     print("AI LOG ANOMALY DETECTION SERVER")
     print("================================")
 
-   
-    host="0.0.0.0",
-    port=int(os.environ.get("PORT", 5000)),
-    debug=False
-import os
-
-app.run(
-    host="0.0.0.0",
-    port=int(os.environ.get("PORT", 5000)),
-    debug=False
-)
+    app.run(
+        host="0.0.0.0",
+        port=int(os.environ.get("PORT", 5000)),
+        debug=False
+    )

@@ -118,7 +118,8 @@ tr:nth-child(even){
 </table>
 
 <script>
-
+const API_URL =
+"https://ai-log-anomaly-detection-z3zg.onrender.com";
 async function loadStats(){
 
     try{
@@ -126,7 +127,7 @@ async function loadStats(){
         console.log("Loading stats...");
 
         const response =
-        await fetch("http://127.0.0.1:5000/stats");
+       await fetch(`${API_URL}/stats`);
 
         console.log(response);
 
@@ -158,7 +159,7 @@ async function loadLogs(){
         console.log("Loading logs...");
 
         const response =
-        await fetch("http://127.0.0.1:5000/logs");
+       await fetch(`${API_URL}/logs`);
 
         const logs = await response.json();
 
@@ -200,7 +201,7 @@ let chart;
 async function loadChart(){
 
     const response =
-    await fetch("http://127.0.0.1:5000/stats");
+    await fetch(`${API_URL}/stats`);
 
     const data =
     await response.json();
