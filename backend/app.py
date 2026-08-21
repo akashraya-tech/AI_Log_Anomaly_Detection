@@ -1,5 +1,4 @@
-from flask import Flask, request, jsonify
-from flask_cors import CORS
+from flask import Flask, request, jsonify, render_template
 from pathlib import Path
 import joblib
 import re
@@ -234,15 +233,9 @@ def extract_features(log_line):
 # Home API
 # ========================================
 
-@app.route("/", methods=["GET"])
-def home():
-
-    return jsonify({
-        "project": "AI Log Anomaly Detection",
-        "status": "running",
-        "model": "Isolation Forest V3"
-    })
-
+@app.route("/")
+def dashboard():
+    return render_template("dashboard.html")
 # ========================================
 # Prediction API
 # ========================================

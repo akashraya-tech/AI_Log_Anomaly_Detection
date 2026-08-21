@@ -124,8 +124,7 @@
 
 <script>
 
-const API_URL =
-"https://ai-log-anomaly-detection-z3zg.onrender.com";
+const API_URL = "";
 
 let chart;
 
@@ -134,7 +133,7 @@ async function loadStats(){
     try{
 
         const response =
-        await fetch(`${API_URL}/stats`);
+        await fetch("/stats");
 
         const data =
         await response.json();
@@ -161,7 +160,7 @@ async function loadLogs(){
     try{
 
         const response =
-        await fetch(`${API_URL}/logs`);
+        await fetch("/logs");
 
         const logs =
         await response.json();
