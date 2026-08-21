@@ -13,9 +13,10 @@ BASE_DIR = Path(__file__).resolve().parent
 # Flask Application
 # ========================================
 
-app =Flask(
-     __name__,
-    template_folder=str(BASE_DIR.parent / "templates") )
+app = Flask(
+    __name__,
+    template_folder="../templates"
+)
 CORS(app)
 
 # ========================================
