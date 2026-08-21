@@ -285,46 +285,46 @@ def predict():
         else:
             status = "NORMAL"
 
-        db = get_db_connection()
+      #  db = get_db_connection()
 
-        cursor = db.cursor()
+       # cursor = db.cursor()
 
-        sql = """
-        INSERT INTO log_predictions
-        (
-            log_date,
-            log_time,
-            level,
-            component,
-            message,
-            event_template,
-            anomaly_status,
-            anomaly_score
-        )
-        VALUES
-        (%s,%s,%s,%s,%s,%s,%s,%s)
-        """
+       # sql = """
+       # INSERT INTO log_predictions
+      #  (
+       #     log_date,
+        #    log_time,
+         #   level,
+         #   component,
+         #   message,
+          #  event_template,
+          #  anomaly_status,
+          #  anomaly_score
+        #)
+        #VALUES
+        #(%s,%s,%s,%s,%s,%s,%s,%s)
+       # """
 
-        values = (
-            log_info["date"],
-            log_info["time"],
-            log_info["level"],
-            log_info["component"],
-            log_info["message"],
-            log_info["event_template"],
-            status,
-            float(anomaly_score)
-        )
+       # values = (
+           # log_info["date"],
+           # log_info["time"],
+           # log_info["level"],
+           # log_info["component"],
+           # log_info["message"],
+          #  log_info["event_template"],
+         #   status,
+        #    float(anomaly_score)
+       # )
 
-        cursor.execute(
-            sql,
-            values
-        )
+       # cursor.execute(
+      #      sql,
+        #    values
+       # )
 
-        db.commit()
+       # db.commit()
 
-        cursor.close()
-        db.close()
+       # cursor.close()
+       # db.close()
 
         return jsonify({
 
