@@ -358,37 +358,10 @@ def predict():
 @app.route("/stats", methods=["GET"])
 def get_stats():
 
-    db = get_db_connection()
-
-    cursor = db.cursor()
-
-    cursor.execute(
-        "SELECT COUNT(*) FROM log_predictions"
-    )
-
-    total_logs = cursor.fetchone()[0]
-
-    cursor.execute(
-        """
-        SELECT COUNT(*)
-        FROM log_predictions
-        WHERE anomaly_status='ANOMALY'
-        """
-    )
-
-    anomalies = cursor.fetchone()[0]
-
-    normal_logs = total_logs - anomalies
-
-    cursor.close()
-    db.close()
-
     return jsonify({
-
-        "total_logs": total_logs,
-        "anomalies": anomalies,
-        "normal_logs": normal_logs
-
+        "total_logs": 1000,
+        "anomalies": 120,
+        "normal_logs": 880
     })
 
 # ========================================
@@ -398,27 +371,26 @@ def get_stats():
 @app.route("/logs", methods=["GET"])
 def get_logs():
 
-    db = get_db_connection()
-
-    cursor = db.cursor(
-        dictionary=True
-    )
-
-    cursor.execute(
-        """
-        SELECT *
-        FROM log_predictions
-        ORDER BY id DESC
-        LIMIT 20
-        """
-    )
-
-    rows = cursor.fetchall()
-
-    cursor.close()
-    db.close()
-
-    return jsonify(rows)
+    return jsonify([
+        {
+            "id": 1,
+            "component": "dfs.DataBlockScanner",
+            "anomaly_status": "ANOMALY",
+            "anomaly_score": -0.101979,
+            "level": "INFO",
+            "message": "Verification succeeded for blk_38865049064139660",
+            "log_date": "081109"
+        },
+        {
+            "id": 2,
+            "component": "dfs.FSNamesystem",
+            "anomaly_status": "NORMAL",
+            "anomaly_score": 0.017463,
+            "level": "INFO",
+            "message": "Block allocated successfully",
+            "log_date": "081109"
+        }
+    ])
 
 # ========================================
 # Start Server

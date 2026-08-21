@@ -4,7 +4,6 @@
     <title>AI Log Anomaly Dashboard</title>
 
     <style>
-
         body{
             font-family: Arial, sans-serif;
             background:#f4f6f9;
@@ -22,25 +21,25 @@
         }
 
         .card{
-    flex:1;
-    padding:20px;
-    border-radius:15px;
-    color:white;
-    text-align:center;
-    box-shadow:0 4px 10px rgba(0,0,0,0.2);
-}
+            flex:1;
+            padding:20px;
+            border-radius:15px;
+            color:white;
+            text-align:center;
+            box-shadow:0 4px 10px rgba(0,0,0,0.2);
+        }
 
-.card:nth-child(1){
-    background:#3498db;
-}
+        .card:nth-child(1){
+            background:#3498db;
+        }
 
-.card:nth-child(2){
-    background:#e74c3c;
-}
+        .card:nth-child(2){
+            background:#e74c3c;
+        }
 
-.card:nth-child(3){
-    background:#2ecc71;
-}
+        .card:nth-child(3){
+            background:#2ecc71;
+        }
 
         .value{
             font-size:30px;
@@ -59,18 +58,22 @@
             text-align:left;
         }
 
-       th{
-    background:#2c3e50;
-    color:white;
-}
+        th{
+            background:#2c3e50;
+            color:white;
+        }
 
-tr:nth-child(even){
-    background:#f2f2f2;
-}
+        tr:nth-child(even){
+            background:#f2f2f2;
+        }
 
+        canvas{
+            max-width:700px;
+            margin-bottom:30px;
+        }
     </style>
-
 </head>
+
 <body>
 
 <h1>AI Log Anomaly Detection Dashboard</h1>
@@ -93,47 +96,48 @@ tr:nth-child(even){
     </div>
 
 </div>
+
 <h2>Log Statistics</h2>
 
 <canvas id="statsChart"></canvas>
+
 <h2>Recent Detections</h2>
 
 <table>
+    <thead>
+        <tr>
+            <th>ID</th>
+            <th>Component</th>
+            <th>Status</th>
+            <th>Score</th>
+            <th>Level</th>
+            <th>Message</th>
+            <th>Date</th>
+        </tr>
+    </thead>
 
-<thead>
-<tr>
-<th>ID</th>
-<th>Component</th>
-<th>Status</th>
-<th>Score</th>
-<th>Level</th>
-<th>Message</th>
-<th>Date</th>
-</tr>
-</thead>
-
-<tbody id="tableBody">
-</tbody>
-
+    <tbody id="tableBody"></tbody>
 </table>
 
+<!-- Load Chart.js FIRST -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
 <script>
+
 const API_URL =
 "https://ai-log-anomaly-detection-z3zg.onrender.com";
+
+let chart;
+
 async function loadStats(){
 
     try{
 
-        console.log("Loading stats...");
-
         const response =
-       await fetch(`${API_URL}/stats`);
+        await fetch(`${API_URL}/stats`);
 
-        console.log(response);
-
-        const data = await response.json();
-
-        console.log(data);
+        const data =
+        await response.json();
 
         document.getElementById("totalLogs").innerText =
         data.total_logs;
@@ -156,14 +160,11 @@ async function loadLogs(){
 
     try{
 
-        console.log("Loading logs...");
-
         const response =
-       await fetch(`${API_URL}/logs`);
+        await fetch(`${API_URL}/logs`);
 
-        const logs = await response.json();
-
-        console.log(logs);
+        const logs =
+        await response.json();
 
         let html = "";
 
@@ -174,14 +175,16 @@ async function loadLogs(){
                 <td>${log.id}</td>
                 <td>${log.component}</td>
                 <td>
-${log.anomaly_status === "ANOMALY"
-? '<span style="color:red;font-weight:bold;">ANOMALY</span>'
-: '<span style="color:green;font-weight:bold;">NORMAL</span>'}
-</td>
+                ${
+                    log.anomaly_status === "ANOMALY"
+                    ? '<span style="color:red;font-weight:bold;">ANOMALY</span>'
+                    : '<span style="color:green;font-weight:bold;">NORMAL</span>'
+                }
+                </td>
                 <td>${log.anomaly_score}</td>
                 <td>${log.level}</td>
-<td>${log.message}</td>
-<td>${log.log_date}</td>
+                <td>${log.message}</td>
+                <td>${log.log_date}</td>
             </tr>
             `;
         });
@@ -196,60 +199,69 @@ ${log.anomaly_status === "ANOMALY"
 
     }
 }
-let chart;
 
 async function loadChart(){
 
-    const response =
-    await fetch(`${API_URL}/stats`);
+    try{
 
-    const data =
-    await response.json();
+        const response =
+        await fetch(`${API_URL}/stats`);
 
-    const ctx =
-    document.getElementById("statsChart");
+        const data =
+        await response.json();
 
-    if(chart){
-        chart.destroy();
-    }
+        const ctx =
+        document.getElementById("statsChart");
 
-    chart = new Chart(ctx, {
-
-        type: "bar",
-
-        data: {
-
-            labels: [
-                "Anomalies",
-                "Normal Logs"
-            ],
-
-            datasets: [{
-
-                label: "Logs",
-
-                data: [
-                    data.anomalies,
-                    data.normal_logs
-                ]
-
-            }]
+        if(chart){
+            chart.destroy();
         }
-    });
+
+        chart = new Chart(ctx, {
+
+            type: "bar",
+
+            data: {
+
+                labels: [
+                    "Anomalies",
+                    "Normal Logs"
+                ],
+
+                datasets: [{
+
+                    label: "Logs",
+
+                    data: [
+                        data.anomalies,
+                        data.normal_logs
+                    ]
+
+                }]
+            }
+        });
+
+    }
+    catch(error){
+
+        console.error("Chart Error:", error);
+
+    }
 }
 
 loadStats();
 loadLogs();
 loadChart();
+
 setInterval(() => {
 
     loadStats();
     loadLogs();
     loadChart();
 
-}, 5000)
+}, 5000);
 
 </script>
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
 </body>
 </html>
