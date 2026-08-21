@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>AI Log Anomaly Dashboard</title>
+
+    <style>
+
+        body{
+            font-family: Arial, sans-serif;
+            background:#f4f6f9;
+            margin:20px;
+        }
+
+        h1{
+            text-align:center;
+        }
+
+        .cards{
+            display:flex;
+            gap:20px;
+            margin-bottom:30px;
+        }
+
+        .card{
+    flex:1;
+    padding:20px;
+    border-radius:15px;
+    color:white;
+    text-align:center;
+    box-shadow:0 4px 10px rgba(0,0,0,0.2);
+}
+
+.card:nth-child(1){
+    background:#3498db;
+}
+
+.card:nth-child(2){
+    background:#e74c3c;
+}
+
+.card:nth-child(3){
+    background:#2ecc71;
+}
+
+        .value{
+            font-size:30px;
+            font-weight:bold;
+        }
+
+        table{
+            width:100%;
+            border-collapse:collapse;
+            background:white;
+        }
+
+        th,td{
+            border:1px solid #ddd;
+            padding:10px;
+            text-align:left;
+        }
+
+       th{
+    background:#2c3e50;
+    color:white;
+}
+
+tr:nth-child(even){
+    background:#f2f2f2;
+}
+
+    </style>
+
+</head>
+<body>
+
+<h1>AI Log Anomaly Detection Dashboard</h1>
+
+<div class="cards">
+
+    <div class="card">
+        <h3>Total Logs</h3>
+        <div class="value" id="totalLogs">0</div>
+    </div>
+
+    <div class="card">
+        <h3>Anomalies</h3>
+        <div class="value" id="anomalies">0</div>
+    </div>
+
+    <div class="card">
+        <h3>Normal Logs</h3>
+        <div class="value" id="normalLogs">0</div>
+    </div>
+
+</div>
+<h2>Log Statistics</h2>
+
+<canvas id="statsChart"></canvas>
+<h2>Recent Detections</h2>
+
+<table>
+
+<thead>
+<tr>
+<th>ID</th>
+<th>Component</th>
+<th>Status</th>
+<th>Score</th>
+<th>Level</th>
+<th>Message</th>
+<th>Date</th>
+</tr>
+</thead>
+
+<tbody id="tableBody">
+</tbody>
+
+</table>
+
+<script>
+
+async function loadStats(){
+
+    try{
+
+        console.log("Loading stats...");
+
+        const response =
+        await fetch("http://127.0.0.1:5000/stats");
+
+        console.log(response);
+
+        const data = await response.json();
+
+        console.log(data);
+
+        document.getElementById("totalLogs").innerText =
+        data.total_logs;
+
+        document.getElementById("anomalies").innerText =
+        data.anomalies;
+
+        document.getElementById("normalLogs").innerText =
+        data.normal_logs;
+
+    }
+    catch(error){
+
+        console.error("Stats Error:", error);
+
+    }
+}
+
+async function loadLogs(){
+
+    try{
+
+        console.log("Loading logs...");
+
+        const response =
+        await fetch("http://127.0.0.1:5000/logs");
+
+        const logs = await response.json();
+
+        console.log(logs);
+
+        let html = "";
+
+        logs.forEach(log => {
+
+            html += `
+            <tr>
+                <td>${log.id}</td>
+                <td>${log.component}</td>
+                <td>
+${log.anomaly_status === "ANOMALY"
+? '<span style="color:red;font-weight:bold;">ANOMALY</span>'
+: '<span style="color:green;font-weight:bold;">NORMAL</span>'}
+</td>
+                <td>${log.anomaly_score}</td>
+                <td>${log.level}</td>
+<td>${log.message}</td>
+<td>${log.log_date}</td>
+            </tr>
+            `;
+        });
+
+        document.getElementById("tableBody").innerHTML =
+        html;
+
+    }
+    catch(error){
+
+        console.error("Logs Error:", error);
+
+    }
+}
+let chart;
+
+async function loadChart(){
+
+    const response =
+    await fetch("http://127.0.0.1:5000/stats");
+
+    const data =
+    await response.json();
+
+    const ctx =
+    document.getElementById("statsChart");
+
+    if(chart){
+        chart.destroy();
+    }
+
+    chart = new Chart(ctx, {
+
+        type: "bar",
+
+        data: {
+
+            labels: [
+                "Anomalies",
+                "Normal Logs"
+            ],
+
+            datasets: [{
+
+                label: "Logs",
+
+                data: [
+                    data.anomalies,
+                    data.normal_logs
+                ]
+
+            }]
+        }
+    });
+}
+
+loadStats();
+loadLogs();
+loadChart();
+setInterval(() => {
+
+    loadStats();
+    loadLogs();
+    loadChart();
+
+}, 5000)
+
+</script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</body>
+</html>

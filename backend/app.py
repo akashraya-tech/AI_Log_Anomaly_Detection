@@ -1,0 +1,436 @@
+from flask import Flask, request, jsonify
+from flask_cors import CORS
+from pathlib import Path
+import joblib
+import re
+import pandas as pd
+import mysql.connector
+from pathlib import Path
+
+BASE_DIR = Path(__file__).resolve().parent
+
+# ========================================
+# Flask Application
+# ========================================
+
+app = Flask(__name__)
+CORS(app)
+
+# ========================================
+# Load AI Model
+# ========================================
+
+# ========================================
+# Load AI Model
+# ========================================
+
+BASE_DIR = Path(__file__).resolve().parent
+
+MODEL_PATH = (
+    BASE_DIR.parent
+    / "model"
+    / "saved_model"
+    / "isolation_forest_v3.joblib"
+)
+
+print("Model path:", MODEL_PATH)
+
+if not MODEL_PATH.exists():
+    raise FileNotFoundError(
+        f"Model not found: {MODEL_PATH}"
+    )
+
+model = joblib.load(MODEL_PATH)
+
+print("AI model loaded successfully!")
+
+# ========================================
+# Database Connection
+# ========================================
+
+def get_db_connection():
+
+    return mysql.connector.connect(
+        host="localhost",
+        user="root",
+        password="AkashMySQL@2026!",
+        database="ai_log_anomaly"
+    )
+
+print("MySQL database connection ready!")
+
+# ========================================
+# Feature Extraction
+# ========================================
+
+def extract_features(log_line):
+
+    parts = log_line.strip().split(" ", 4)
+
+    if len(parts) < 5:
+        raise ValueError(
+            "Invalid HDFS log format."
+        )
+
+    date = parts[0]
+    time = parts[1]
+    log_id = parts[2]
+    level = parts[3]
+    remaining = parts[4]
+
+    if ": " in remaining:
+        component, message = remaining.split(
+            ": ", 1
+        )
+    else:
+        component = remaining
+        message = ""
+
+    template = message
+
+    template = re.sub(
+        r"\b(?:\d{1,3}\.){3}\d{1,3}\b",
+        "<IP>",
+        template
+    )
+
+    template = re.sub(
+        r"\bblk_-?\d+\b",
+        "<BLOCK>",
+        template
+    )
+
+    template = re.sub(
+        r":\d{4,5}\b",
+        ":<PORT>",
+        template
+    )
+
+    template = re.sub(
+        r"\b\d{5,}\b",
+        "<NUM>",
+        template
+    )
+
+    template = re.sub(
+        r"\b\d+\b",
+        "<NUM>",
+        template
+    )
+
+    template = re.sub(
+        r"\s+",
+        " ",
+        template
+    ).strip()
+
+    training_file =(
+    BASE_DIR.parent
+    / "data"
+    / "logs"
+    / "event_templates.csv"
+   )
+    
+
+    training_df = pd.read_csv(
+        training_file
+    )
+
+    template_frequency = (
+        training_df["event_template"]
+        .value_counts()
+    )
+
+    template_freq = template_frequency.get(
+        template,
+        0
+    )
+
+    component_frequency = (
+        training_df["component"]
+        .value_counts()
+    )
+
+    component_freq = component_frequency.get(
+        component,
+        0
+    )
+
+    message_length = len(message)
+
+    word_count = len(
+        message.split()
+    )
+
+    block_count = len(
+        re.findall(
+            r"\bblk_-?\d+\b",
+            message
+        )
+    )
+
+    ip_count = len(
+        re.findall(
+            r"\b(?:\d{1,3}\.){3}\d{1,3}\b",
+            message
+        )
+    )
+
+    exception_present = int(
+        "exception" in message.lower()
+    )
+
+    verification_present = int(
+        "verification" in message.lower()
+    )
+
+    delete_present = int(
+        bool(
+            re.search(
+                r"delete|deleting",
+                message,
+                re.IGNORECASE
+            )
+        )
+    )
+
+    allocate_present = int(
+        "allocateblock" in message.lower()
+    )
+
+    hour = int(time[0:2])
+    minute = int(time[2:4])
+
+    features = pd.DataFrame([{
+
+        "hour": hour,
+        "minute": minute,
+        "message_length": message_length,
+        "word_count": word_count,
+        "block_count": block_count,
+        "ip_count": ip_count,
+        "template_frequency": template_freq,
+        "component_frequency": component_freq,
+        "exception_present": exception_present,
+        "verification_present": verification_present,
+        "delete_present": delete_present,
+        "allocate_present": allocate_present
+
+    }])
+
+    return features, {
+
+        "date": date,
+        "time": time,
+        "level": level,
+        "component": component,
+        "message": message,
+        "event_template": template
+
+    }
+
+# ========================================
+# Home API
+# ========================================
+
+@app.route("/", methods=["GET"])
+def home():
+
+    return jsonify({
+        "project": "AI Log Anomaly Detection",
+        "status": "running",
+        "model": "Isolation Forest V3"
+    })
+
+# ========================================
+# Prediction API
+# ========================================
+
+@app.route("/predict", methods=["POST"])
+def predict():
+
+    try:
+
+        data = request.get_json()
+
+        if not data or "log" not in data:
+
+            return jsonify({
+                "error":
+                "Please provide a log field."
+            }), 400
+
+        log_line = data["log"]
+
+        features, log_info = extract_features(
+            log_line
+        )
+
+        print("\n===== FEATURES =====")
+        print(features.to_string())
+        print("====================\n")
+
+        prediction = model.predict(
+            features
+        )[0]
+
+        anomaly_score = (
+            model.decision_function(
+                features
+            )[0]
+        )
+
+        if prediction == -1:
+            status = "ANOMALY"
+        else:
+            status = "NORMAL"
+
+        db = get_db_connection()
+
+        cursor = db.cursor()
+
+        sql = """
+        INSERT INTO log_predictions
+        (
+            log_date,
+            log_time,
+            level,
+            component,
+            message,
+            event_template,
+            anomaly_status,
+            anomaly_score
+        )
+        VALUES
+        (%s,%s,%s,%s,%s,%s,%s,%s)
+        """
+
+        values = (
+            log_info["date"],
+            log_info["time"],
+            log_info["level"],
+            log_info["component"],
+            log_info["message"],
+            log_info["event_template"],
+            status,
+            float(anomaly_score)
+        )
+
+        cursor.execute(
+            sql,
+            values
+        )
+
+        db.commit()
+
+        cursor.close()
+        db.close()
+
+        return jsonify({
+
+            "status": status,
+
+            "anomaly_score": round(
+                float(anomaly_score),
+                6
+            ),
+
+            "log": log_info
+
+        })
+
+    except Exception as e:
+      import traceback
+
+    print("\n===== ERROR =====")
+    traceback.print_exc()
+    print("=================\n")
+
+    return jsonify({
+        "error": str(e)
+    }), 500
+
+# ========================================
+# Dashboard Stats API
+# ========================================
+
+@app.route("/stats", methods=["GET"])
+def get_stats():
+
+    db = get_db_connection()
+
+    cursor = db.cursor()
+
+    cursor.execute(
+        "SELECT COUNT(*) FROM log_predictions"
+    )
+
+    total_logs = cursor.fetchone()[0]
+
+    cursor.execute(
+        """
+        SELECT COUNT(*)
+        FROM log_predictions
+        WHERE anomaly_status='ANOMALY'
+        """
+    )
+
+    anomalies = cursor.fetchone()[0]
+
+    normal_logs = total_logs - anomalies
+
+    cursor.close()
+    db.close()
+
+    return jsonify({
+
+        "total_logs": total_logs,
+        "anomalies": anomalies,
+        "normal_logs": normal_logs
+
+    })
+
+# ========================================
+# Dashboard Logs API
+# ========================================
+
+@app.route("/logs", methods=["GET"])
+def get_logs():
+
+    db = get_db_connection()
+
+    cursor = db.cursor(
+        dictionary=True
+    )
+
+    cursor.execute(
+        """
+        SELECT *
+        FROM log_predictions
+        ORDER BY id DESC
+        LIMIT 20
+        """
+    )
+
+    rows = cursor.fetchall()
+
+    cursor.close()
+    db.close()
+
+    return jsonify(rows)
+
+# ========================================
+# Start Server
+# ========================================
+
+if __name__ == "__main__":
+
+    print("================================")
+    print("AI LOG ANOMALY DETECTION SERVER")
+    print("================================")
+
+    app.run(
+        host="127.0.0.1",
+        port=5000,
+        debug=True
+    )
