@@ -2,81 +2,132 @@
 <html>
 <head>
     <title>AI Log Anomaly Dashboard</title>
+<style>
+*{
+    margin:0;
+    padding:0;
+    box-sizing:border-box;
+    font-family:'Segoe UI',sans-serif;
+}
 
-    <style>
-        body{
-            font-family: Arial, sans-serif;
-            background:#f4f6f9;
-            margin:20px;
-        }
+body{
+    background:#0f172a;
+    color:white;
+    padding:20px;
+}
 
-        h1{
-            text-align:center;
-        }
+h1{
+    text-align:center;
+    margin-bottom:30px;
+    color:#f8fafc;
+    font-size:42px;
+}
 
-        .cards{
-            display:flex;
-            gap:20px;
-            margin-bottom:30px;
-        }
 
-        .card{
-            flex:1;
-            padding:20px;
-            border-radius:15px;
-            color:white;
-            text-align:center;
-            box-shadow:0 4px 10px rgba(0,0,0,0.2);
-        }
 
-        .card:nth-child(1){
-            background:#3498db;
-        }
+h2{
+    text-align:center;
+    margin-top:40px;
+    margin-bottom:20px;
+    color:#e2e8f0;
+}
 
-        .card:nth-child(2){
-            background:#e74c3c;
-        }
+.cards{
+    display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(250px,1fr));
+    gap:20px;
+    margin-bottom:30px;
+}
 
-        .card:nth-child(3){
-            background:#2ecc71;
-        }
+.card{
+    padding:25px;
+    border-radius:16px;
+    text-align:center;
+    box-shadow:0 5px 15px rgba(0,0,0,0.4);
+    transition:0.3s;
+}
 
-        .value{
-            font-size:30px;
-            font-weight:bold;
-        }
+.card:hover{
+    transform:translateY(-5px);
+}
 
-        table{
-            width:100%;
-            border-collapse:collapse;
-            background:white;
-        }
+.card:nth-child(1){
+    background:#2563eb;
+}
 
-        th,td{
-            border:1px solid #ddd;
-            padding:10px;
-            text-align:left;
-        }
+.card:nth-child(2){
+    background:#dc2626;
+}
 
-        th{
-            background:#2c3e50;
-            color:white;
-        }
+.card:nth-child(3){
+    background:#16a34a;
+}
 
-        tr:nth-child(even){
-            background:#f2f2f2;
-        }
+.card:nth-child(4){
+    background:#9333ea;
+}
 
-        canvas{
-            max-width:700px;
-            margin-bottom:30px;
-        }
-    </style>
+.value{
+    font-size:40px;
+    font-weight:bold;
+    margin-top:10px;
+}
+
+.chart-container{
+    width:600px;
+    max-width:100%;
+    margin:20px auto;
+    background:#1e293b;
+    padding:25px;
+    border-radius:15px;
+    box-shadow:0 5px 15px rgba(0,0,0,0.3);
+}
+
+#statsChart{
+    max-height:400px;
+}
+
+table{
+    width:100%;
+    border-collapse:collapse;
+    background:#1e293b;
+    border-radius:12px;
+    overflow:hidden;
+    margin-top:20px;
+    box-shadow:0 5px 15px rgba(0,0,0,0.3);
+}
+
+th{
+    background:#334155;
+    color:white;
+    padding:14px;
+    text-align:left;
+}
+
+td{
+    padding:12px;
+    border-bottom:1px solid #475569;
+}
+
+tr:hover{
+    background:#273449;
+}
+.anomaly{
+    color:#ef4444;
+    font-weight:bold;
+}
+
+.normal{
+    color:#22c55e;
+    font-weight:bold;
+}
+</style>
 </head>
 
 <body>
 
-<h1>AI Log Anomaly Detection Dashboard</h1>
+<h1>🛡️ AI Log Anomaly Detection Dashboard</h1>
+
 
 <div class="cards">
 
@@ -94,13 +145,18 @@
         <h3>Normal Logs</h3>
         <div class="value" id="normalLogs">0</div>
     </div>
+    <div class="card">
+    <h3>Anomaly Rate</h3>
+    <div class="value" id="anomalyRate">0%</div>
+</div>
 
 </div>
 
 <h2>Log Statistics</h2>
 
-<canvas id="statsChart"></canvas>
-
+<div class="chart-container">
+    <canvas id="statsChart"></canvas>
+</div>
 <h2>Recent Detections</h2>
 
 <table>
@@ -146,6 +202,15 @@ async function loadStats(){
 
         document.getElementById("normalLogs").innerText =
         data.normal_logs;
+        const rate =
+     data.total_logs > 0
+?
+((data.anomalies / data.total_logs) * 100).toFixed(1)
+:
+0;
+
+document.getElementById("anomalyRate").innerText =
+rate + "%";
 
     }
     catch(error){
@@ -175,9 +240,9 @@ async function loadLogs(){
                 <td>${log.component}</td>
                 <td>
                 ${
-                    log.anomaly_status === "ANOMALY"
-                    ? '<span style="color:red;font-weight:bold;">ANOMALY</span>'
-                    : '<span style="color:green;font-weight:bold;">NORMAL</span>'
+                  log.anomaly_status === "ANOMALY"
+? '<span class="anomaly">🚨 ANOMALY</span>'
+: '<span class="normal">✅ NORMAL</span>'
                 }
                 </td>
                 <td>${log.anomaly_score}</td>
@@ -204,7 +269,7 @@ async function loadChart(){
     try{
 
         const response =
-        await fetch(`${API_URL}/stats`);
+        await fetch("/stats");
 
         const data =
         await response.json();
@@ -218,24 +283,24 @@ async function loadChart(){
 
         chart = new Chart(ctx, {
 
-            type: "bar",
+            type:"pie",
 
-            data: {
-
-                labels: [
+            data:{
+                labels:[
                     "Anomalies",
                     "Normal Logs"
                 ],
 
-                datasets: [{
-
-                    label: "Logs",
-
-                    data: [
+                datasets:[{
+                    data:[
                         data.anomalies,
                         data.normal_logs
-                    ]
+                    ],
 
+                    backgroundColor:[
+                        "#ef4444",
+                        "#22c55e"
+                    ]
                 }]
             }
         });
@@ -243,8 +308,10 @@ async function loadChart(){
     }
     catch(error){
 
-        console.error("Chart Error:", error);
-
+        console.error(
+            "Chart Error:",
+            error
+        );
     }
 }
 

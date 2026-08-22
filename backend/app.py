@@ -56,7 +56,7 @@ import os
 import psycopg2
 
 def get_db_connection():
-    print(os.getenv("DB_PASSWORD"))
+    print("DB_PASSWORD =", os.getenv("DB_PASSWORD"))
     return psycopg2.connect(    
         host="pg-2cec95ed-ailoganomalydetection.a.aivencloud.com",
         database="defaultdb",
