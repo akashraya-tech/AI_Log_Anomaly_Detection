@@ -1,18 +1,20 @@
 from flask import Flask, request, jsonify, render_template
+from psycopg2.extras import RealDictCursor
 from flask_cors import CORS
 from pathlib import Path
+from dotenv import load_dotenv
 import joblib
 import re
 import pandas as pd
-import mysql.connector
-from pathlib import Path
+
 
 BASE_DIR = Path(__file__).resolve().parent
 
 # ========================================
 # Flask Application
 # ========================================
-
+from dotenv import load_dotenv
+load_dotenv()
 app = Flask(
     __name__,
     template_folder="../templates"
@@ -45,23 +47,25 @@ if not MODEL_PATH.exists():
 
 model = joblib.load(MODEL_PATH)
 
-print("AI model loaded successfully!")
+print("AKASH TEST 999")
 
 # ========================================
 # Database Connection
 # ========================================
-
 import os
+import psycopg2
 
 def get_db_connection():
-
-    return mysql.connector.connect(
-        host=os.environ.get("DB_HOST", "localhost"),
-        user=os.environ.get("DB_USER", "root"),
-        password=os.environ.get("DB_PASSWORD", "AkashMySQL@2026!"),
-        database=os.environ.get("DB_NAME", "ai_log_anomaly")
+    print(os.getenv("DB_PASSWORD"))
+    return psycopg2.connect(    
+        host="pg-2cec95ed-ailoganomalydetection.a.aivencloud.com",
+        database="defaultdb",
+        user="avnadmin",
+        password=os.getenv("DB_PASSWORD"),
+        port="19268",
+        sslmode="require",
     )
-print("MySQL database connection ready!")
+print("PostgreSQL database connection ready!")
 
 # ========================================
 # Feature Extraction
@@ -252,89 +256,68 @@ def predict():
         data = request.get_json()
 
         if not data or "log" not in data:
-
             return jsonify({
-                "error":
-                "Please provide a log field."
+                "error": "Please provide a log field."
             }), 400
 
         log_line = data["log"]
 
-        features, log_info = extract_features(
-            log_line
-        )
+        features, log_info = extract_features(log_line)
 
         print("\n===== FEATURES =====")
         print(features.to_string())
         print("====================\n")
 
-        prediction = model.predict(
-            features
-        )[0]
+        prediction = model.predict(features)[0]
 
-        anomaly_score = (
-            model.decision_function(
-                features
-            )[0]
-        )
+        anomaly_score = model.decision_function(features)[0]
 
         if prediction == -1:
             status = "ANOMALY"
         else:
             status = "NORMAL"
 
-      #  db = get_db_connection()
+        db = get_db_connection()
+        cursor = db.cursor()
 
-       # cursor = db.cursor()
+        sql = """
+        INSERT INTO log_predictions
+        (
+            log_date,
+            log_time,
+            level,
+            component,
+            message,
+            event_template,
+            anomaly_status,
+            anomaly_score
+        )
+        VALUES
+        (%s,%s,%s,%s,%s,%s,%s,%s)
+        """
 
-       # sql = """
-       # INSERT INTO log_predictions
-      #  (
-       #     log_date,
-        #    log_time,
-         #   level,
-         #   component,
-         #   message,
-          #  event_template,
-          #  anomaly_status,
-          #  anomaly_score
-        #)
-        #VALUES
-        #(%s,%s,%s,%s,%s,%s,%s,%s)
-       # """
+        values = (
+            log_info["date"],
+            log_info["time"],
+            log_info["level"],
+            log_info["component"],
+            log_info["message"],
+            log_info["event_template"],
+            status,
+            float(anomaly_score)
+        )
 
-       # values = (
-           # log_info["date"],
-           # log_info["time"],
-           # log_info["level"],
-           # log_info["component"],
-           # log_info["message"],
-          #  log_info["event_template"],
-         #   status,
-        #    float(anomaly_score)
-       # )
+        cursor.execute(sql, values)
 
-       # cursor.execute(
-      #      sql,
-        #    values
-       # )
+        db.commit()
 
-       # db.commit()
-
-       # cursor.close()
-       # db.close()
+        cursor.close()
+        db.close()
 
         return jsonify({
-
             "status": status,
-
-            "anomaly_score": round(
-                float(anomaly_score),
-                6
-            ),
-
+            "anomaly_score": round(float(anomaly_score), 6),
             "log": log_info
-
         })
 
     except Exception as e:
@@ -352,15 +335,32 @@ def predict():
 # Dashboard Stats API
 # ========================================
 
-@app.route("/stats", methods=["GET"])
+@app.route("/stats")
 def get_stats():
 
-    return jsonify({
-        "total_logs": 1000,
-        "anomalies": 120,
-        "normal_logs": 880
-    })
+    db = get_db_connection()
+    cursor = db.cursor()
 
+    cursor.execute("SELECT COUNT(*) FROM log_predictions")
+    total_logs = cursor.fetchone()[0]
+
+    cursor.execute("""
+        SELECT COUNT(*)
+        FROM log_predictions
+        WHERE anomaly_status='ANOMALY'
+    """)
+    anomalies = cursor.fetchone()[0]
+
+    normal_logs = total_logs - anomalies
+
+    cursor.close()
+    db.close()
+
+    return jsonify({
+        "total_logs": total_logs,
+        "anomalies": anomalies,
+        "normal_logs": normal_logs
+    })
 # ========================================
 # Dashboard Logs API
 # ========================================
@@ -368,33 +368,37 @@ def get_stats():
 @app.route("/logs", methods=["GET"])
 def get_logs():
 
-    return jsonify([
-        {
-            "id": 1,
-            "component": "dfs.DataBlockScanner",
-            "anomaly_status": "ANOMALY",
-            "anomaly_score": -0.101979,
-            "level": "INFO",
-            "message": "Verification succeeded for blk_38865049064139660",
-            "log_date": "081109"
-        },
-        {
-            "id": 2,
-            "component": "dfs.FSNamesystem",
-            "anomaly_status": "NORMAL",
-            "anomaly_score": 0.017463,
-            "level": "INFO",
-            "message": "Block allocated successfully",
-            "log_date": "081109"
-        }
-    ])
+    db = get_db_connection()
+    cursor = db.cursor(cursor_factory=RealDictCursor)
 
+    cursor.execute(
+        """
+        SELECT
+            id,
+            component,
+            anomaly_status,
+            anomaly_score,
+            level,
+            message,
+            log_date
+        FROM log_predictions
+        ORDER BY id DESC
+        LIMIT 20
+        """
+    )
+
+    logs = cursor.fetchall()
+
+    cursor.close()
+    db.close()
+
+    return jsonify(logs)
 # ========================================
 # Start Server
 # ========================================
 
 if __name__ == "__main__":
-
+  
     print("================================")
     print("AI LOG ANOMALY DETECTION SERVER")
     print("================================")
