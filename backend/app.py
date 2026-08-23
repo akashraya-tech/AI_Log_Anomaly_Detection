@@ -2,6 +2,7 @@ from flask import Flask, request, jsonify, render_template
 from psycopg2.extras import RealDictCursor
 from flask import session, redirect, url_for
 from flask_cors import CORS
+from datetime import timedelta
 from pathlib import Path
 from dotenv import load_dotenv
 import joblib
