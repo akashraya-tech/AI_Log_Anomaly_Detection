@@ -20,7 +20,11 @@ app = Flask(
     __name__,
     template_folder="../templates"
 )
+
 app.secret_key = "akash_project_secret"
+
+app.permanent_session_lifetime = timedelta(minutes=1)
+
 CORS(app)
 
 # ========================================
@@ -419,7 +423,8 @@ def login():
         password = request.form["password"]
 
         if username == "admin" and password == "AILog@2026#Secure":
-
+         
+            session.permanent = True
             session["logged_in"] = True
 
             return redirect("/")
