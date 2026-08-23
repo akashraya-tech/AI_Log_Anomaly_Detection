@@ -63,12 +63,15 @@
 <div class="login-box">
 
     <h1>🛡️ AI Log Detector</h1>
-    {% if error %}
+  <h1>🛡️ AI Log Detector</h1>
+
+{% if error %}
 <p style="color:red;text-align:center;margin-bottom:15px;">
     {{ error }}
 </p>
 {% endif %}
 
+<form method="POST" action="/login">
     <form method="POST" action="/login">
 
         <input

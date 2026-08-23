@@ -420,7 +420,7 @@ def get_logs():
 
     return jsonify(logs)
 # ========================================
-# login 
+# Dashboard login 
 # ========================================
 
 @app.route("/login", methods=["GET", "POST"])
@@ -428,23 +428,30 @@ def login():
 
     global login_count
 
+    error = None
+
     if request.method == "POST":
 
         username = request.form["username"]
         password = request.form["password"]
 
         if username == "admin" and password == "AILog@2026#Secure":
+
+            login_count += 1
+
+            session.permanent = True
             session["logged_in"] = True
+
             return redirect("/")
 
         else:
+
             error = "Wrong username or password"
-            login_count += 1
 
-            session["logged_in"] = True
-            return redirect("/")
-
-    return render_template("login.html")
+    return render_template(
+        "login.html",
+        error=error
+    )
 # ========================================
 # Start Server
 # ========================================
