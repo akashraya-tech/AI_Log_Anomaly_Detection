@@ -23,6 +23,8 @@ app = Flask(
 )
 
 app.secret_key = "akash_project_secret"
+# Login counter
+login_count = 0
 
 app.permanent_session_lifetime = timedelta(minutes=1)
 
@@ -262,6 +264,12 @@ def logout():
     session.clear()
 
     return redirect("/login")
+@app.route("/login-stats")
+def login_stats():
+
+    return jsonify({
+        "total_logins": login_count
+    })
 # ========================================
 # Prediction API
 # ========================================
@@ -418,16 +426,18 @@ def get_logs():
 @app.route("/login", methods=["GET", "POST"])
 def login():
 
+    global login_count
+
     if request.method == "POST":
 
         username = request.form["username"]
         password = request.form["password"]
 
         if username == "admin" and password == "AILog@2026#Secure":
-         
-            session.permanent = True
-            session["logged_in"] = True
 
+            login_count += 1
+
+            session["logged_in"] = True
             return redirect("/")
 
     return render_template("login.html")
