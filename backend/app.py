@@ -407,6 +407,25 @@ def get_logs():
 
     return jsonify(logs)
 # ========================================
+# login 
+# ========================================
+
+@app.route("/login", methods=["GET", "POST"])
+def login():
+
+    if request.method == "POST":
+
+        username = request.form["username"]
+        password = request.form["password"]
+
+        if username == "admin" and password == "admin123":
+
+            session["logged_in"] = True
+
+            return redirect("/")
+
+    return render_template("login.html")
+# ========================================
 # Start Server
 # ========================================
 
@@ -421,22 +440,3 @@ if __name__ == "__main__":
         port=int(os.environ.get("PORT", 5000)),
         debug=False
     )
-# ========================================
-# login rout
-# ========================================
-    
-    @app.route("/login", methods=["GET", "POST"])
-    def login():
-
-     if request.method == "POST":
-
-        username = request.form["username"]
-        password = request.form["password"]
-
-        if username == "admin" and password == "admin123":
-
-            session["logged_in"] = True
-
-            return redirect("/")
-
-     return render_template("login.html") 
