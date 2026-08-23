@@ -1,5 +1,6 @@
 from flask import Flask, request, jsonify, render_template
 from psycopg2.extras import RealDictCursor
+from flask import session, redirect, url_for
 from flask_cors import CORS
 from pathlib import Path
 from dotenv import load_dotenv
@@ -19,6 +20,7 @@ app = Flask(
     __name__,
     template_folder="../templates"
 )
+app.secret_key = "akash_project_secret"
 CORS(app)
 
 # ========================================
@@ -236,6 +238,7 @@ def extract_features(log_line):
         "event_template": template
 
     }
+    
 
 # ========================================
 # Home API
@@ -243,7 +246,17 @@ def extract_features(log_line):
 
 @app.route("/")
 def dashboard():
+
+    if not session.get("logged_in"):
+        return redirect("/login")
+
     return render_template("dashboard.html")
+@app.route("/logout")
+def logout():
+
+    session.clear()
+
+    return redirect("/login")
 # ========================================
 # Prediction API
 # ========================================
@@ -408,3 +421,22 @@ if __name__ == "__main__":
         port=int(os.environ.get("PORT", 5000)),
         debug=False
     )
+# ========================================
+# login rout
+# ========================================
+    
+    @app.route("/login", methods=["GET", "POST"])
+    def login():
+
+     if request.method == "POST":
+
+        username = request.form["username"]
+        password = request.form["password"]
+
+        if username == "admin" and password == "admin123":
+
+            session["logged_in"] = True
+
+            return redirect("/")
+
+     return render_template("login.html") 
