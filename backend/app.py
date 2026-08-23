@@ -418,7 +418,7 @@ def login():
         username = request.form["username"]
         password = request.form["password"]
 
-        if username == "admin" and password == "admin123":
+        if username == "admin" and password == "AILog@2026#Secure":
 
             session["logged_in"] = True
 
