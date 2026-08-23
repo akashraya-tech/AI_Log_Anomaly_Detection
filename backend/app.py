@@ -434,7 +434,11 @@ def login():
         password = request.form["password"]
 
         if username == "admin" and password == "AILog@2026#Secure":
+            session["logged_in"] = True
+            return redirect("/")
 
+        else:
+            error = "Wrong username or password"
             login_count += 1
 
             session["logged_in"] = True
