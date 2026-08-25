@@ -270,6 +270,9 @@ def login_stats():
     return jsonify({
         "total_logins": login_count
     })
+@app.route("/test")
+def test():
+    return "Server Working"
 # ========================================
 # Prediction API
 # ========================================
