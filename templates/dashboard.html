@@ -167,6 +167,18 @@ tr:hover{
     color:white;
     font-size:16px;
 }
+.anomaly-row{
+    background:rgba(239,68,68,0.15);
+}
+
+.normal-row{
+    background:rgba(34,197,94,0.10);
+}
+footer{
+    margin-top:40px;
+    text-align:center;
+    color:#94a3b8;
+}
 </style>
 </head>
 
@@ -194,6 +206,10 @@ tr:hover{
     <div class="card">
     <h3>Anomaly Rate</h3>
     <div class="value" id="anomalyRate">0%</div>
+    <div class="card">
+    <h3>Login Count</h3>
+    <div class="value" id="loginCount">0</div>
+</div>
 </div>
 
 </div>
@@ -233,7 +249,11 @@ tr:hover{
 
 <table>
     <thead>
-        <tr>
+        <tr<tr class="${
+log.anomaly_status === 'ANOMALY'
+? 'anomaly-row'
+: 'normal-row'
+}">>
             <th>ID</th>
             <th>Component</th>
             <th>Status</th>
@@ -283,7 +303,7 @@ async function loadStats(){
         document.getElementById("normalLogs").innerText =
         data.normal_logs;
         const rate =
-     data.total_logs > 0
+        data.total_logs > 0
 ?
 ((data.anomalies / data.total_logs) * 100).toFixed(1)
 :
@@ -298,6 +318,27 @@ rate + "%";
         console.error("Stats Error:", error);
 
     }
+}
+const rate =
+data.total_logs > 0
+? ((data.anomalies / data.total_logs) * 100).toFixed(1)
+: 0;
+
+document.getElementById("anomalyRate").innerText =
+rate + "%";
+
+const health =
+document.getElementById("systemHealth");
+
+if(rate > 30){
+    health.innerHTML =
+    "🔴 High Anomaly Activity Detected";
+    health.style.background="#dc2626";
+}
+else{
+    health.innerHTML =
+    "🟢 System Healthy";
+    health.style.background="#16a34a";
 }
 
 async function loadLogs(){
@@ -325,7 +366,7 @@ async function loadLogs(){
 : '<span class="normal">✅ NORMAL</span>'
                 }
                 </td>
-                <td>${log.anomaly_score}</td>
+               <td>${Number(log.anomaly_score).toFixed(4)}</td>
                 <td>${log.level}</td>
                 <td>${log.message}</td>
                 <td>${log.log_date}</td>
@@ -342,6 +383,19 @@ async function loadLogs(){
         console.error("Logs Error:", error);
 
     }
+}
+async function loadLoginStats(){
+
+    const response =
+    await fetch("/login-stats");
+
+    const data =
+    await response.json();
+
+    document.getElementById(
+        "loginCount"
+    ).innerText =
+    data.total_logins;
 }
 function updateClock(){
 
@@ -409,6 +463,7 @@ async function loadChart(){
 loadStats();
 loadLogs();
 loadChart();
+loadLoginStats();
 function filterLogs(){
 
     let input =
@@ -438,6 +493,9 @@ setInterval(() => {
 }, 5000);
 
 </script>
-
+<footer>
+    AI Powered Log Monitoring System |
+    Built by Akash Raya
+</footer>
 </body>
 </html>
