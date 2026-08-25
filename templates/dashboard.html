@@ -241,6 +241,7 @@ footer{
         <div class="alert-item">
             Unauthorized Access Attempt
         </div>
+        <div id="systemHealth" class="health-banner">   
     </div>
 
 </div>
@@ -249,11 +250,11 @@ footer{
 
 <table>
     <thead>
-        <tr<tr class="${
+        <tr class="${
 log.anomaly_status === 'ANOMALY'
 ? 'anomaly-row'
 : 'normal-row'
-}">>
+}">
             <th>ID</th>
             <th>Component</th>
             <th>Status</th>
@@ -319,27 +320,7 @@ rate + "%";
 
     }
 }
-const rate =
-data.total_logs > 0
-? ((data.anomalies / data.total_logs) * 100).toFixed(1)
-: 0;
 
-document.getElementById("anomalyRate").innerText =
-rate + "%";
-
-const health =
-document.getElementById("systemHealth");
-
-if(rate > 30){
-    health.innerHTML =
-    "🔴 High Anomaly Activity Detected";
-    health.style.background="#dc2626";
-}
-else{
-    health.innerHTML =
-    "🟢 System Healthy";
-    health.style.background="#16a34a";
-}
 
 async function loadLogs(){
 
