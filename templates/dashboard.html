@@ -174,11 +174,7 @@ tr:hover{
 .normal-row{
     background:rgba(34,197,94,0.10);
 }
-footer{
-    margin-top:40px;
-    text-align:center;
-    color:#94a3b8;
-}
+
 </style>
 </head>
 
@@ -203,16 +199,17 @@ footer{
         <h3>Normal Logs</h3>
         <div class="value" id="normalLogs">0</div>
     </div>
-    <div class="card">
+   <div class="card">
     <h3>Anomaly Rate</h3>
     <div class="value" id="anomalyRate">0%</div>
-    <div class="card">
+</div>
+
+<div class="card">
     <h3>Login Count</h3>
     <div class="value" id="loginCount">0</div>
 </div>
-</div>
 
-</div>
+
 <div class="status-bar">
     <div>🟢 System Online</div>
     <div>🤖 AI Model Active</div>
@@ -221,7 +218,7 @@ footer{
 </div>
 
 <div class="dashboard-grid">
-
+</div>
     <div class="panel">
         <h2>Log Statistics</h2>
         <canvas id="statsChart"></canvas>
@@ -247,14 +244,17 @@ footer{
 </div>
 
 <h2>Recent Detections</h2>
-
+ <div class="search-container">
+    <input
+        type="text"
+        id="searchBox"
+        placeholder="Search logs..."
+        onkeyup="filterLogs()"
+    >
+</div>
 <table>
     <thead>
-        <tr class="${
-log.anomaly_status === 'ANOMALY'
-? 'anomaly-row'
-: 'normal-row'
-}">
+        <tr>
             <th>ID</th>
             <th>Component</th>
             <th>Status</th>
@@ -264,14 +264,7 @@ log.anomaly_status === 'ANOMALY'
             <th>Date</th>
         </tr>
     </thead>
-    <div class="search-container">
-    <input
-        type="text"
-        id="searchBox"
-        placeholder="Search logs..."
-        onkeyup="filterLogs()"
-    >
-</div>
+   
 
     <tbody id="tableBody"></tbody>
 </table>
@@ -474,9 +467,5 @@ setInterval(() => {
 }, 5000);
 
 </script>
-<footer>
-    AI Powered Log Monitoring System |
-    Built by Akash Raya
-</footer>
 </body>
 </html>
