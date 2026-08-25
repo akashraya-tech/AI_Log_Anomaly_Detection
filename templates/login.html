@@ -55,15 +55,7 @@
         button:hover{
             background:#1d4ed8;
         }
-        .health-banner{
-    margin:20px 0;
-    padding:15px;
-    border-radius:12px;
-    text-align:center;
-    font-size:20px;
-    font-weight:bold;
-    background:#16a34a;
-}
+  
     </style>
 </head>
 
@@ -71,17 +63,14 @@
 
 <div class="login-box">
 
-  
-</div>
-  <h1>🛡️ AI Log Detector</h1>
+    <h1>🛡️ AI Log Detector</h1>
 
-{% if error %}
-<p style="color:red;text-align:center;margin-bottom:15px;">
-    {{ error }}
-</p>
-{% endif %}
+    {% if error %}
+    <p style="color:#ef4444;text-align:center;margin-bottom:15px;">
+        {{ error }}
+    </p>
+    {% endif %}
 
-<form method="POST" action="/login">
     <form method="POST" action="/login">
 
         <input
