@@ -273,6 +273,10 @@ def login_stats():
 @app.route("/test")
 def test():
     return "Server Working"
+@app.route("/logout")
+def logout():
+    session.clear()
+    return redirect("/login")
 # ========================================
 # Prediction API
 # ========================================
