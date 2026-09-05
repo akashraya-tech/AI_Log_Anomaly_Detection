@@ -273,8 +273,9 @@ def login_stats():
 @app.route("/test")
 def test():
     return "Server Working"
-@app.route("/logout")
-def logout():
+
+@app.route("/signout")
+def signout():
     session.clear()
     return redirect("/login")
 # ========================================
