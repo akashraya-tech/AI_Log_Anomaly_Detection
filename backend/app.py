@@ -273,6 +273,22 @@ def login_stats():
 @app.route("/test")
 def test():
     return "Server Working"
+@app.route("/db-test")
+def db_test():
+    try:
+        db = get_db_connection()
+        cursor = db.cursor()
+
+        cursor.execute("SELECT 1")
+        result = cursor.fetchone()
+
+        cursor.close()
+        db.close()
+
+        return f"Database Connected: {result}"
+
+    except Exception as e:
+        return str(e), 500
 
 @app.route("/signout")
 def signout():
