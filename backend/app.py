@@ -381,6 +381,18 @@ def predict():
         return jsonify({
             "error": str(e)
         }), 500
+@app.route("/dns-test")
+def dns_test():
+    import socket
+
+    try:
+        ip = socket.gethostbyname(
+            "pg-2cec95ed-ailoganomalydetection.a.aivencloud.com"
+        )
+        return f"DNS OK: {ip}"
+
+    except Exception as e:
+        return str(e)
 # ========================================
 # Dashboard Stats API
 # ========================================
