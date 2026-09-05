@@ -54,7 +54,19 @@ AI_Log_Anomaly_Detection/
 ├── README.md
 └── model/
 ```
+## Dashboard Preview
 
+### Main Dashboard
+
+![Dashboard](screenshots/dashboard.png)
+
+### Login Page
+
+![Login](screenshots/login.png)
+
+### Alerts Panel
+
+![Alerts](screenshots/alerts.png)
 ## 📊 Dashboard Preview
 
 (Add screenshots here)
