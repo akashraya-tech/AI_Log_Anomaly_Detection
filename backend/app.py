@@ -1,45 +1,67 @@
-from flask import Flask, request, jsonify, render_template
-from psycopg2.extras import RealDictCursor
-from flask import session, redirect, url_for
-from flask_cors import CORS
-from datetime import timedelta
-from pathlib import Path
-from dotenv import load_dotenv
-import joblib
+import os
 import re
-import pandas as pd
+import secrets
+from datetime import timedelta
+from functools import wraps
+from pathlib import Path
 
+import joblib
+import pandas as pd
+import psycopg2
+from psycopg2 import pool
+from psycopg2.extras import RealDictCursor
+from flask import Flask, request, jsonify, render_template, session, redirect, url_for
+from flask_cors import CORS
+from dotenv import load_dotenv
+
+load_dotenv()
 
 BASE_DIR = Path(__file__).resolve().parent
 
 # ========================================
 # Flask Application
 # ========================================
-from dotenv import load_dotenv
-load_dotenv()
 app = Flask(
     __name__,
     template_folder="../templates"
 )
 
-app.secret_key = "akash_project_secret"
-# Login counter
-login_count = 0
-
-app.permanent_session_lifetime = timedelta(minutes=1)
-
+app.secret_key = os.getenv("SECRET_KEY", "fallback_secret_key_change_in_env")
+app.permanent_session_lifetime = timedelta(minutes=30)
 CORS(app)
 
+login_count = 0
+
 # ========================================
-# Load AI Model
+# Authentication Helpers & API Key Decorator
 # ========================================
+ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", "admin")
+ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "AILog@2026#Secure")
+API_KEY = os.getenv("API_KEY", "logdetect-api-key-2026")
+
+def generate_csrf_token():
+    if "_csrf_token" not in session:
+        session["_csrf_token"] = secrets.token_hex(16)
+    return session["_csrf_token"]
+
+app.jinja_env.globals["csrf_token"] = generate_csrf_token
+
+def require_auth(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        # Allow authenticated session
+        if session.get("logged_in"):
+            return f(*args, **kwargs)
+        # Allow via API Key header
+        client_key = request.headers.get("X-API-Key")
+        if client_key and client_key == API_KEY:
+            return f(*args, **kwargs)
+        return jsonify({"error": "Unauthorized access. Provide valid session or X-API-Key."}), 401
+    return decorated_function
 
 # ========================================
 # Load AI Model
 # ========================================
-
-BASE_DIR = Path(__file__).resolve().parent
-
 MODEL_PATH = (
     BASE_DIR.parent
     / "model"
@@ -55,39 +77,83 @@ if not MODEL_PATH.exists():
     )
 
 model = joblib.load(MODEL_PATH)
-
-print("AKASH TEST 999")
+print("AI Model loaded successfully!")
 
 # ========================================
-# Database Connection
+# Pre-cache Training Frequencies (Performance Optimization)
 # ========================================
-import os
-import psycopg2
+TRAINING_FILE = (
+    BASE_DIR.parent
+    / "data"
+    / "logs"
+    / "event_templates.csv"
+)
 
-def get_db_connection():
-    print("DB_PASSWORD =", os.getenv("DB_PASSWORD"))
-    return psycopg2.connect(    
-        host="pg-2cec95ed-ailoganomalydetection.a.aivencloud.com",
-        database="defaultdb",
-        user="avnadmin",
-        password=os.getenv("DB_PASSWORD"),
-        port="19268",
+if TRAINING_FILE.exists():
+    print("Pre-caching template and component frequencies...")
+    _training_df = pd.read_csv(TRAINING_FILE)
+    CACHED_TEMPLATE_FREQ = _training_df["event_template"].value_counts().to_dict()
+    CACHED_COMPONENT_FREQ = _training_df["component"].value_counts().to_dict()
+    print("Frequencies pre-cached successfully!")
+else:
+    print("Warning: event_templates.csv not found for pre-caching. Using empty dicts.")
+    CACHED_TEMPLATE_FREQ = {}
+    CACHED_COMPONENT_FREQ = {}
+
+# ========================================
+# Database Connection Pool
+# ========================================
+DB_HOST = os.getenv("DB_HOST", "pg-2cec95ed-ailoganomalydetection.a.aivencloud.com")
+DB_PORT = os.getenv("DB_PORT", "19268")
+DB_NAME = os.getenv("DB_NAME", "defaultdb")
+DB_USER = os.getenv("DB_USER", "avnadmin")
+DB_PASSWORD = os.getenv("DB_PASSWORD")
+
+db_pool = None
+try:
+    if DB_PASSWORD:
+        db_pool = pool.SimpleConnectionPool(
+            1,
+            10,
+            host=DB_HOST,
+            port=DB_PORT,
+            database=DB_NAME,
+            user=DB_USER,
+            password=DB_PASSWORD,
+            sslmode="require",
+        )
+        print("PostgreSQL connection pool initialized successfully!")
+    else:
+        print("DB_PASSWORD not configured. Database pooling not started.")
+except Exception as e:
+    print(f"Failed to initialize PostgreSQL pool: {e}")
+
+def get_db_conn():
+    if db_pool:
+        return db_pool.getconn()
+    return psycopg2.connect(
+        host=DB_HOST,
+        port=DB_PORT,
+        database=DB_NAME,
+        user=DB_USER,
+        password=DB_PASSWORD,
         sslmode="require",
     )
-print("PostgreSQL database connection ready!")
+
+def release_db_conn(conn):
+    if db_pool and conn:
+        db_pool.putconn(conn)
+    elif conn:
+        conn.close()
 
 # ========================================
 # Feature Extraction
 # ========================================
-
 def extract_features(log_line):
-
     parts = log_line.strip().split(" ", 4)
 
     if len(parts) < 5:
-        raise ValueError(
-            "Invalid HDFS log format."
-        )
+        raise ValueError("Invalid HDFS log format.")
 
     date = parts[0]
     time = parts[1]
@@ -96,130 +162,36 @@ def extract_features(log_line):
     remaining = parts[4]
 
     if ": " in remaining:
-        component, message = remaining.split(
-            ": ", 1
-        )
+        component, message = remaining.split(": ", 1)
     else:
         component = remaining
         message = ""
 
     template = message
 
-    template = re.sub(
-        r"\b(?:\d{1,3}\.){3}\d{1,3}\b",
-        "<IP>",
-        template
-    )
+    template = re.sub(r"\b(?:\d{1,3}\.){3}\d{1,3}\b", "<IP>", template)
+    template = re.sub(r"\bblk_-?\d+\b", "<BLOCK>", template)
+    template = re.sub(r":\d{4,5}\b", ":<PORT>", template)
+    template = re.sub(r"\b\d+\b", "<NUM>", template)
+    template = re.sub(r"\s+", " ", template).strip()
 
-    template = re.sub(
-        r"\bblk_-?\d+\b",
-        "<BLOCK>",
-        template
-    )
-
-    template = re.sub(
-        r":\d{4,5}\b",
-        ":<PORT>",
-        template
-    )
-
-    template = re.sub(
-        r"\b\d{5,}\b",
-        "<NUM>",
-        template
-    )
-
-    template = re.sub(
-        r"\b\d+\b",
-        "<NUM>",
-        template
-    )
-
-    template = re.sub(
-        r"\s+",
-        " ",
-        template
-    ).strip()
-
-    training_file =(
-    BASE_DIR.parent
-    / "data"
-    / "logs"
-    / "event_templates.csv"
-   )
-    
-
-    training_df = pd.read_csv(
-        training_file
-    )
-
-    template_frequency = (
-        training_df["event_template"]
-        .value_counts()
-    )
-
-    template_freq = template_frequency.get(
-        template,
-        0
-    )
-
-    component_frequency = (
-        training_df["component"]
-        .value_counts()
-    )
-
-    component_freq = component_frequency.get(
-        component,
-        0
-    )
+    template_freq = CACHED_TEMPLATE_FREQ.get(template, 0)
+    component_freq = CACHED_COMPONENT_FREQ.get(component, 0)
 
     message_length = len(message)
+    word_count = len(message.split())
+    block_count = len(re.findall(r"\bblk_-?\d+\b", message))
+    ip_count = len(re.findall(r"\b(?:\d{1,3}\.){3}\d{1,3}\b", message))
 
-    word_count = len(
-        message.split()
-    )
+    exception_present = int("exception" in message.lower())
+    verification_present = int("verification" in message.lower())
+    delete_present = int(bool(re.search(r"delete|deleting", message, re.IGNORECASE)))
+    allocate_present = int("allocateblock" in message.lower())
 
-    block_count = len(
-        re.findall(
-            r"\bblk_-?\d+\b",
-            message
-        )
-    )
-
-    ip_count = len(
-        re.findall(
-            r"\b(?:\d{1,3}\.){3}\d{1,3}\b",
-            message
-        )
-    )
-
-    exception_present = int(
-        "exception" in message.lower()
-    )
-
-    verification_present = int(
-        "verification" in message.lower()
-    )
-
-    delete_present = int(
-        bool(
-            re.search(
-                r"delete|deleting",
-                message,
-                re.IGNORECASE
-            )
-        )
-    )
-
-    allocate_present = int(
-        "allocateblock" in message.lower()
-    )
-
-    hour = int(time[0:2])
-    minute = int(time[2:4])
+    hour = int(time[0:2]) if len(time) >= 2 and time[0:2].isdigit() else 0
+    minute = int(time[2:4]) if len(time) >= 4 and time[2:4].isdigit() else 0
 
     features = pd.DataFrame([{
-
         "hour": hour,
         "minute": minute,
         "message_length": message_length,
@@ -232,77 +204,101 @@ def extract_features(log_line):
         "verification_present": verification_present,
         "delete_present": delete_present,
         "allocate_present": allocate_present
-
     }])
 
     return features, {
-
         "date": date,
         "time": time,
         "level": level,
         "component": component,
         "message": message,
         "event_template": template
-
     }
-    
 
 # ========================================
-# Home API
+# Dashboard / Web Views
 # ========================================
-
 @app.route("/")
 def dashboard():
-
     if not session.get("logged_in"):
         return redirect("/login")
-
     return render_template("dashboard.html")
+
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    global login_count
+    error = None
+
+    if request.method == "POST":
+        token = request.form.get("csrf_token")
+        if not token or token != session.get("_csrf_token"):
+            error = "Invalid or missing CSRF token"
+            return render_template("login.html", error=error), 400
+
+        username = request.form.get("username", "")
+        password = request.form.get("password", "")
+
+        if username == ADMIN_USERNAME and password == ADMIN_PASSWORD:
+            login_count += 1
+            session.permanent = True
+            session["logged_in"] = True
+            return redirect("/")
+        else:
+            error = "Wrong username or password"
+
+    return render_template("login.html", error=error)
+
 @app.route("/logout")
 def logout():
-
     session.clear()
-
     return redirect("/login")
-@app.route("/login-stats")
-def login_stats():
 
+@app.route("/login-stats")
+@require_auth
+def login_stats():
     return jsonify({
         "total_logins": login_count
     })
+
+# ========================================
+# Diagnostic & Testing Routes
+# ========================================
 @app.route("/test")
 def test():
     return "Server Working"
+
 @app.route("/db-test")
 def db_test():
+    db = None
     try:
-        db = get_db_connection()
+        db = get_db_conn()
         cursor = db.cursor()
-
         cursor.execute("SELECT 1")
         result = cursor.fetchone()
-
         cursor.close()
-        db.close()
-
         return f"Database Connected: {result}"
+    except Exception as e:
+        return str(e), 500
+    finally:
+        release_db_conn(db)
 
+@app.route("/dns-test")
+def dns_test():
+    import socket
+    try:
+        ip = socket.gethostbyname(DB_HOST)
+        return f"DNS OK: {ip}"
     except Exception as e:
         return str(e), 500
 
-@app.route("/signout")
-def signout():
-    session.clear()
-    return redirect("/login")
 # ========================================
 # Prediction API
 # ========================================
-
 @app.route("/predict", methods=["POST"])
+@require_auth
 def predict():
-
+    db = None
     try:
-
         data = request.get_json()
 
         if not data or "log" not in data:
@@ -311,23 +307,14 @@ def predict():
             }), 400
 
         log_line = data["log"]
-
         features, log_info = extract_features(log_line)
 
-        print("\n===== FEATURES =====")
-        print(features.to_string())
-        print("====================\n")
-
         prediction = model.predict(features)[0]
-
         anomaly_score = model.decision_function(features)[0]
 
-        if prediction == -1:
-            status = "ANOMALY"
-        else:
-            status = "NORMAL"
+        status = "ANOMALY" if prediction == -1 else "NORMAL"
 
-        db = get_db_connection()
+        db = get_db_conn()
         cursor = db.cursor()
 
         sql = """
@@ -358,11 +345,8 @@ def predict():
         )
 
         cursor.execute(sql, values)
-
         db.commit()
-
         cursor.close()
-        db.close()
 
         return jsonify({
             "status": status,
@@ -371,129 +355,82 @@ def predict():
         })
 
     except Exception as e:
-
-        import traceback
-
-        print("\n===== ERROR =====")
-        traceback.print_exc()
-        print("=================\n")
-
         return jsonify({
             "error": str(e)
         }), 500
-@app.route("/dns-test")
-def dns_test():
-    import socket
+    finally:
+        release_db_conn(db)
 
-    try:
-        ip = socket.gethostbyname(
-            "pg-2cec95ed-ailoganomalydetection.a.aivencloud.com"
-        )
-        return f"DNS OK: {ip}"
-
-    except Exception as e:
-        return str(e)
 # ========================================
-# Dashboard Stats API
+# Dashboard Stats & Logs API
 # ========================================
-
 @app.route("/stats")
+@require_auth
 def get_stats():
+    db = None
+    try:
+        db = get_db_conn()
+        cursor = db.cursor()
 
-    db = get_db_connection()
-    cursor = db.cursor()
+        cursor.execute("SELECT COUNT(*) FROM log_predictions")
+        total_logs = cursor.fetchone()[0]
 
-    cursor.execute("SELECT COUNT(*) FROM log_predictions")
-    total_logs = cursor.fetchone()[0]
+        cursor.execute("""
+            SELECT COUNT(*)
+            FROM log_predictions
+            WHERE anomaly_status='ANOMALY'
+        """)
+        anomalies = cursor.fetchone()[0]
 
-    cursor.execute("""
-        SELECT COUNT(*)
-        FROM log_predictions
-        WHERE anomaly_status='ANOMALY'
-    """)
-    anomalies = cursor.fetchone()[0]
+        normal_logs = total_logs - anomalies
 
-    normal_logs = total_logs - anomalies
-
-    cursor.close()
-    db.close()
-
-    return jsonify({
-        "total_logs": total_logs,
-        "anomalies": anomalies,
-        "normal_logs": normal_logs
-    })
-# ========================================
-# Dashboard Logs API
-# ========================================
+        cursor.close()
+        return jsonify({
+            "total_logs": total_logs,
+            "anomalies": anomalies,
+            "normal_logs": normal_logs
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        release_db_conn(db)
 
 @app.route("/logs", methods=["GET"])
+@require_auth
 def get_logs():
+    db = None
+    try:
+        db = get_db_conn()
+        cursor = db.cursor(cursor_factory=RealDictCursor)
 
-    db = get_db_connection()
-    cursor = db.cursor(cursor_factory=RealDictCursor)
+        cursor.execute(
+            """
+            SELECT
+                id,
+                component,
+                anomaly_status,
+                anomaly_score,
+                level,
+                message,
+                log_date
+            FROM log_predictions
+            ORDER BY id DESC
+            LIMIT 20
+            """
+        )
 
-    cursor.execute(
-        """
-        SELECT
-            id,
-            component,
-            anomaly_status,
-            anomaly_score,
-            level,
-            message,
-            log_date
-        FROM log_predictions
-        ORDER BY id DESC
-        LIMIT 20
-        """
-    )
+        logs = cursor.fetchall()
+        cursor.close()
+        return jsonify(logs)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        release_db_conn(db)
 
-    logs = cursor.fetchall()
-
-    cursor.close()
-    db.close()
-
-    return jsonify(logs)
-# ========================================
-# Dashboard login 
-# ========================================
-
-@app.route("/login", methods=["GET", "POST"])
-def login():
-
-    global login_count
-
-    error = None
-
-    if request.method == "POST":
-
-        username = request.form["username"]
-        password = request.form["password"]
-
-        if username == "admin" and password == "AILog@2026#Secure":
-
-            login_count += 1
-
-            session.permanent = True
-            session["logged_in"] = True
-
-            return redirect("/")
-
-        else:
-
-            error = "Wrong username or password"
-
-    return render_template(
-        "login.html",
-        error=error
-    )
 # ========================================
 # Start Server
 # ========================================
-
 if __name__ == "__main__":
-  
     print("================================")
     print("AI LOG ANOMALY DETECTION SERVER")
     print("================================")

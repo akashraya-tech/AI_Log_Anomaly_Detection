@@ -124,13 +124,21 @@ trace_features = trace_features.merge(
 # 6. Calculate trace duration
 # ========================================
 
-df["time_numeric"] = pd.to_numeric(
-    df["time"].astype(str),
-    errors="coerce"
-)
+# Convert HHMMSS string to total seconds from midnight
+def time_to_seconds(t_str):
+    s = str(t_str).zfill(6)
+    try:
+        hh = int(s[0:2])
+        mm = int(s[2:4])
+        ss = int(s[4:6])
+        return hh * 3600 + mm * 60 + ss
+    except (ValueError, IndexError):
+        return 0
+
+df["time_seconds"] = df["time"].apply(time_to_seconds)
 
 time_stats = (
-    df.groupby("block_id")["time_numeric"]
+    df.groupby("block_id")["time_seconds"]
     .agg(
         first_time="min",
         last_time="max"

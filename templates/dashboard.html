@@ -23,8 +23,6 @@ h1{
     font-size:42px;
 }
 
-
-
 h2{
     text-align:center;
     margin-top:40px;
@@ -202,9 +200,7 @@ table{
 </div>
 <h1>🛡️ AI Log Anomaly Detection Dashboard</h1>
 
-
 <div class="cards">
-
     <div class="card">
         <h3>Total Logs</h3>
         <div class="value" id="totalLogs">0</div>
@@ -219,33 +215,25 @@ table{
         <h3>Normal Logs</h3>
         <div class="value" id="normalLogs">0</div>
     </div>
-   <div class="card">
-    <h3>Anomaly Rate</h3>
-    <div class="value" id="anomalyRate">0%</div>
-</div>
+    <div class="card">
+        <h3>Anomaly Rate</h3>
+        <div class="value" id="anomalyRate">0%</div>
+    </div>
 
-<div class="card">
-    <h3>Login Count</h3>
-    <div class="value" id="loginCount">0</div>
-</div>
-
+    <div class="card">
+        <h3>Login Count</h3>
+        <div class="value" id="loginCount">0</div>
+    </div>
 </div>
 
 <div class="dashboard-grid">
-
-   <div class="panel">
-    <h2>System Status</h2>
-
-    <p style="margin:20px 0;">🟢 System Online</p>
-
-    <p style="margin:20px 0;">🤖 AI Model Active</p>
-
-    <p style="margin:20px 0;">🗄 Database Connected</p>
-
-    <p id="lastUpdated" style="margin-top:30px;">
-        ⏱ Loading...
-    </p>
-</div>
+    <div class="panel">
+        <h2>System Status</h2>
+        <p style="margin:20px 0;">🟢 System Online</p>
+        <p style="margin:20px 0;">🤖 AI Model Active</p>
+        <p style="margin:20px 0;">🗄 Database Connected</p>
+        <p id="lastUpdated" style="margin-top:30px;">⏱ Loading...</p>
+    </div>
     <div class="panel">
         <h2>Log Statistics</h2>
         <canvas id="statsChart"></canvas>
@@ -253,24 +241,14 @@ table{
 
     <div class="panel">
         <h2>🚨 Critical Alerts</h2>
-
-        <div class="alert-item">
-            Verification Failed Detected
-        </div>
-
-        <div class="alert-item">
-            Block Deletion Exception
-        </div>
-
-        <div class="alert-item">
-            Unauthorized Access Attempt
-        </div>
+        <div class="alert-item">Verification Failed Detected</div>
+        <div class="alert-item">Block Deletion Exception</div>
+        <div class="alert-item">Unauthorized Access Attempt</div>
     </div>
-
 </div>
 
 <h2>Recent Detections</h2>
- <div class="search-container">
+<div class="search-container">
     <input
         type="text"
         id="searchBox"
@@ -290,8 +268,6 @@ table{
             <th>Date</th>
         </tr>
     </thead>
-   
-
     <tbody id="tableBody"></tbody>
 </table>
 
@@ -299,199 +275,124 @@ table{
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
 <script>
-
-const API_URL = "";
-
 let chart;
 
-async function loadStats(){
+function escapeHtml(text) {
+    if (text === null || text === undefined) return "";
+    return String(text)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+}
 
-    try{
+// Single fetch for stats and chart (Fix 9)
+async function updateStatsAndChart(){
+    try {
+        const response = await fetch("/stats");
+        if (!response.ok) return;
+        const data = await response.json();
 
-        const response =
-        await fetch("/stats");
+        document.getElementById("totalLogs").innerText = data.total_logs ?? 0;
+        document.getElementById("anomalies").innerText = data.anomalies ?? 0;
+        document.getElementById("normalLogs").innerText = data.normal_logs ?? 0;
 
-        const data =
-        await response.json();
+        const rate = (data.total_logs && data.total_logs > 0)
+            ? ((data.anomalies / data.total_logs) * 100).toFixed(1)
+            : 0;
+        document.getElementById("anomalyRate").innerText = rate + "%";
 
-        document.getElementById("totalLogs").innerText =
-        data.total_logs;
-
-        document.getElementById("anomalies").innerText =
-        data.anomalies;
-
-        document.getElementById("normalLogs").innerText =
-        data.normal_logs;
-        const rate =
-        data.total_logs > 0
-?
-((data.anomalies / data.total_logs) * 100).toFixed(1)
-:
-0;
-
-document.getElementById("anomalyRate").innerText =
-rate + "%";
-
-    }
-    catch(error){
-
+        const ctx = document.getElementById("statsChart");
+        if (chart) {
+            chart.data.datasets[0].data = [data.anomalies ?? 0, data.normal_logs ?? 0];
+            chart.update();
+        } else {
+            chart = new Chart(ctx, {
+                type: "doughnut",
+                data: {
+                    labels: ["Anomalies", "Normal Logs"],
+                    datasets: [{
+                        data: [data.anomalies ?? 0, data.normal_logs ?? 0],
+                        backgroundColor: ["#ef4444", "#22c55e"]
+                    }]
+                }
+            });
+        }
+    } catch(error) {
         console.error("Stats Error:", error);
-
     }
 }
 
-
 async function loadLogs(){
-
-    try{
-
-        const response =
-        await fetch("/logs");
-
-        const logs =
-        await response.json();
+    try {
+        const response = await fetch("/logs");
+        if (!response.ok) return;
+        const logs = await response.json();
 
         let html = "";
-
         logs.forEach(log => {
+            const isAnomaly = log.anomaly_status === "ANOMALY";
+            const badge = isAnomaly 
+                ? '<span class="anomaly">🚨 ANOMALY</span>' 
+                : '<span class="normal">✅ NORMAL</span>';
+            const score = Number(log.anomaly_score).toFixed(4);
 
+            // Fix 4: Escape log fields to prevent XSS
             html += `
-            <tr>
-                <td>${log.id}</td>
-                <td>${log.component}</td>
-                <td>
-                ${
-                  log.anomaly_status === "ANOMALY"
-? '<span class="anomaly">🚨 ANOMALY</span>'
-: '<span class="normal">✅ NORMAL</span>'
-                }
-                </td>
-               <td>${Number(log.anomaly_score).toFixed(4)}</td>
-                <td>${log.level}</td>
-                <td>${log.message}</td>
-                <td>${log.log_date}</td>
+            <tr class="${isAnomaly ? 'anomaly-row' : 'normal-row'}">
+                <td>${escapeHtml(log.id)}</td>
+                <td>${escapeHtml(log.component)}</td>
+                <td>${badge}</td>
+                <td>${escapeHtml(score)}</td>
+                <td>${escapeHtml(log.level)}</td>
+                <td>${escapeHtml(log.message)}</td>
+                <td>${escapeHtml(log.log_date)}</td>
             </tr>
             `;
         });
 
-        document.getElementById("tableBody").innerHTML =
-        html;
-
-    }
-    catch(error){
-
+        document.getElementById("tableBody").innerHTML = html;
+    } catch(error) {
         console.error("Logs Error:", error);
-
     }
 }
+
 async function loadLoginStats(){
-
-    const response =
-    await fetch("/login-stats");
-
-    const data =
-    await response.json();
-
-    document.getElementById(
-        "loginCount"
-    ).innerText =
-    data.total_logins;
+    try {
+        const response = await fetch("/login-stats");
+        if (!response.ok) return;
+        const data = await response.json();
+        document.getElementById("loginCount").innerText = data.total_logins ?? 0;
+    } catch(e) {
+        console.error("Login stats error:", e);
+    }
 }
+
 function updateClock(){
-
-    document.getElementById("lastUpdated")
-    .innerText =
-    "⏱ " +
-    new Date().toLocaleString();
-
+    document.getElementById("lastUpdated").innerText = "⏱ " + new Date().toLocaleString();
 }
-
-setInterval(updateClock,1000);
+setInterval(updateClock, 1000);
 updateClock();
 
-async function loadChart(){
-
-    try{
-
-        const response =
-        await fetch("/stats");
-
-        const data =
-        await response.json();
-
-        const ctx =
-        document.getElementById("statsChart");
-
-        if(chart){
-            chart.destroy();
-        }
-
-        chart = new Chart(ctx, {
-
-          type:"doughnut",
-
-            data:{
-                labels:[
-                    "Anomalies",
-                    "Normal Logs"
-                ],
-
-                datasets:[{
-                    data:[
-                        data.anomalies,
-                        data.normal_logs
-                    ],
-
-                    backgroundColor:[
-                        "#ef4444",
-                        "#22c55e"
-                    ]
-                }]
-            }
-        });
-
-    }
-    catch(error){
-
-        console.error(
-            "Chart Error:",
-            error
-        );
-    }
-}
-
-loadStats();
-loadLogs();
-loadChart();
-loadLoginStats();
 function filterLogs(){
-
-    let input =
-    document.getElementById("searchBox")
-    .value
-    .toLowerCase();
-
-    let rows =
-    document.querySelectorAll("#tableBody tr");
-
+    const input = document.getElementById("searchBox").value.toLowerCase();
+    const rows = document.querySelectorAll("#tableBody tr");
     rows.forEach(row => {
-
-        row.style.display =
-        row.innerText.toLowerCase().includes(input)
-        ? ""
-        : "none";
-
+        row.style.display = row.innerText.toLowerCase().includes(input) ? "" : "none";
     });
 }
 
+// Initial loads
+updateStatsAndChart();
+loadLogs();
+loadLoginStats();
+
+// Auto refresh polling every 5s
 setInterval(() => {
-
-    loadStats();
+    updateStatsAndChart();
     loadLogs();
-    loadChart();
-
 }, 5000);
-
 </script>
 </body>
 </html>
