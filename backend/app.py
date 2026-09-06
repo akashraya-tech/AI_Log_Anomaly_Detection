@@ -254,7 +254,6 @@ def logout():
     return redirect("/login")
 
 @app.route("/login-stats")
-@require_auth
 def login_stats():
     return jsonify({
         "total_logins": login_count
@@ -365,7 +364,6 @@ def predict():
 # Dashboard Stats & Logs API
 # ========================================
 @app.route("/stats")
-@require_auth
 def get_stats():
     db = None
     try:
@@ -396,7 +394,6 @@ def get_stats():
         release_db_conn(db)
 
 @app.route("/logs", methods=["GET"])
-@require_auth
 def get_logs():
     db = None
     try:
